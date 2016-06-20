@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/KeriWarr/unnatural-selection#readme",
   "dependencies": {
+    "csv-write-stream": "^2.0.0",
     "lodash": "^4.13.1"
   },
   "devDependencies": {
