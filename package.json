@@ -1,0 +1,32 @@
+{
+  "name": "unnatural-selection",
+  "version": "1.0.0",
+  "description": "A side project that simulates plant evolution",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "babel index.js > run.js",
+    "run": "node run.js",
+    "start": "npm run build; npm run run"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/KeriWarr/unnatural-selection.git"
+  },
+  "keywords": [
+    "simulation"
+  ],
+  "author": "Keri Warr",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/KeriWarr/unnatural-selection/issues"
+  },
+  "homepage": "https://github.com/KeriWarr/unnatural-selection#readme",
+  "dependencies": {
+    "lodash": "^4.13.1"
+  },
+  "devDependencies": {
+    "babel-cli": "^6.10.1",
+    "babel-preset-es2015": "^6.9.0"
+  }
+}
