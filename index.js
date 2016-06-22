@@ -3,7 +3,7 @@ import csvWriter from  'csv-write-stream';
 import fs from 'fs';
 
 
-const WORLD_SIZE = 10;
+const WORLD_SIZE = 5;
 const GERMINATION_TIME = 5;
 const INITIAL_HEIGHT = 8;
 const INITIAL_WIDTH = 3;
@@ -320,7 +320,7 @@ function mapWorldToPlantList(world) {
 
 
 
-const NUM_ITERATIONS = 100;
+const NUM_ITERATIONS = 1000;
 
 function iterateAndWriteCSV(world) {
   const csvWriterOptions = {
