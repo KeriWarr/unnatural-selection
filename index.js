@@ -3,7 +3,7 @@ import csvWriter from  'csv-write-stream';
 import fs from 'fs';
 
 
-const WORLD_SIZE = 40;
+const WORLD_SIZE = 5;
 const GERMINATION_TIME = 5;
 const INITIAL_HEIGHT = 8;
 const INITIAL_WIDTH = 3;
@@ -53,18 +53,22 @@ initialWorld[middleIndex][middleIndex] = [initialPlant];
  * plats are killed
  */
 
+/* AAAAAAAAA these functions should be pure!!!!! */
+
 function sunlightToSeed(plant) {
   return (plant.width * plant.width) * 2 * LIGHT_FOR_SEEDS_COEFFICIENT;
 }
 
 function applyToAllPlants(world, func) {
+  console.log(world);
   return _.map(world, row => _.map(row, func));
 }
 
 function makePlantsSeeding(world) {
+  console.log(world);
   return applyToAllPlants(world, plants => {
     let plant = plants[0];
-    if (plant.status == 'germinating' && plant.age >= GERMINATION_TIME) {
+    if (plant && plant.status == 'germinating' && plant.age >= GERMINATION_TIME) {
       plant = Object.assign({}, plant, {
         age: 0,
         status: 'seeding',
@@ -75,10 +79,42 @@ function makePlantsSeeding(world) {
 }
 
 function collectSunlight(world) {
+  console.log(world);
+  let canopy = _.range(WORLD_SIZE)
+    .map(()=>_.range(WORLD_SIZE).map(()=>[]));
+
+  for (var i = 0; i < WORLD_SIZE; i++) {
+    for (var j = 0; j < WORLD_SIZE; j++) {
+      const plant = world[i][j][0];
+      if (plant) {
+        for (var k = (-1 * plant.width) + 1; k < plant.width; k++) {
+          for (var l = (-1 * plant.width) + 1; l < plant.width; l++) {
+            if ((Math.abs(k) + Math.abs(l)) >= plant.width) continue;
+            const x = i + k;
+            const y = j + l;
+            if (x >= 0 && y >= 0 && x < WORLD_SIZE && y < WORLD_SIZE) {
+              canopy[x][y].push({ x: i, y: j, height: plant.height });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  for (var x = 0; x < WORLD_SIZE; x++) {
+    for (var y = 0; y < WORLD_SIZE; y++) {
+      if (canopy[x][y].length > 0) {
+        const topPlant = _.sortBy(canopy[x][y], leaf => -1 * leaf.height)[0];
+        world[topPlant.x][topPlant.y][0].sunlight += 1;
+      }
+    }
+  }
+
   return world;
 }
 
 function spreadSeeds(world) {
+  console.log(world);
   for (var i = 0; i < WORLD_SIZE; i++) {
     for (var j = 0; j < WORLD_SIZE; j++) {
       const plants = world[i][j];
@@ -108,6 +144,8 @@ function spreadSeeds(world) {
       }
     }
   }
+
+  return world;
 }
 
 function filterSeeds(world) {
@@ -188,7 +226,7 @@ function mapWorldToPlantList(world) {
 
 
 
-const NUM_ITERATIONS = 20;
+const NUM_ITERATIONS = 2;
 
 function iterateAndWriteCSV(world) {
   const csvWriterOptions = {
