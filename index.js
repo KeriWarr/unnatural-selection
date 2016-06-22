@@ -3,12 +3,45 @@ import csvWriter from  'csv-write-stream';
 import fs from 'fs';
 
 
-const WORLD_SIZE = 5;
+const WORLD_SIZE = 10;
 const GERMINATION_TIME = 5;
 const INITIAL_HEIGHT = 8;
 const INITIAL_WIDTH = 3;
-const INITIAL_LIFESPAN = 20;
-const INITIAL_SHADE_TOLERANCE = 50; // out of 100
+const INITIAL_LIFESPAN = 10;
+const INITIAL_SHADE_TOLERANCE = 25; // out of 100
+
+const MUTATION_FACTOR = 0.5;
+
+const scoreHeight = height => Math.log2(height);
+const scoreWidth = width => Math.log(width)/Math.log(1.6);
+const scoreLifeSpan = lifeSpan => Math.log(lifeSpan)/Math.log(3);
+const scoreShadeTolerance = shadeTolerance => shadeTolerance/10;
+
+const invScoreHeight = height => Math.pow(2, height);
+const invScoreWidth = width => Math.pow(1.6, width);
+const invScoreLifeSpan = lifeSpan => Math.pow(3, lifeSpan);
+const invScoreShadeTolerance = shadeTolerance => shadeTolerance * 10;
+
+const ATTRIBUTE_INDICES = {
+  0: 'height',
+  1: 'width',
+  2: 'lifeSpan',
+  3: 'shadeTolerance',
+}
+
+const SCORE_FN_INDICES = {
+  0: scoreHeight,
+  1: scoreWidth,
+  2: scoreLifeSpan,
+  3: scoreShadeTolerance,
+};
+
+const INV_SCORE_FN_INDICES = {
+  0: invScoreHeight,
+  1: invScoreWidth,
+  2: invScoreLifeSpan,
+  3: invScoreShadeTolerance,
+};
 
 /*
  * plants need to collect this much light per surface area in order to send out
@@ -60,26 +93,26 @@ function sunlightToSeed(plant) {
 }
 
 function applyToAllPlants(world, func) {
-  console.log(world);
   return _.map(world, row => _.map(row, func));
 }
 
 function makePlantsSeeding(world) {
-  console.log(world);
   return applyToAllPlants(world, plants => {
-    let plant = plants[0];
+    const plant = plants[0];
     if (plant && plant.status == 'germinating' && plant.age >= GERMINATION_TIME) {
-      plant = Object.assign({}, plant, {
+      return [Object.assign({}, plant, {
         age: 0,
         status: 'seeding',
-      });
+      })];
     }
-    return [plant];
+    if (plant) {
+      return [plant];
+    }
+    return [];
   });
 }
 
 function collectSunlight(world) {
-  console.log(world);
   let canopy = _.range(WORLD_SIZE)
     .map(()=>_.range(WORLD_SIZE).map(()=>[]));
 
@@ -114,33 +147,34 @@ function collectSunlight(world) {
 }
 
 function spreadSeeds(world) {
-  console.log(world);
   for (var i = 0; i < WORLD_SIZE; i++) {
     for (var j = 0; j < WORLD_SIZE; j++) {
       const plants = world[i][j];
-      let plant = _.find(
+      let plantIndex = _.findIndex(
         plants,
         plant => plant.status !== 'seed'
       );
+      if (plantIndex >= 0) {
+        const plant = world[i][j][plantIndex];
+        const neededSunlight = sunlightToSeed(plant);
+        if (plant.status == 'seeding' && plant.sunlight >= neededSunlight) {
+          world[i][j][plantIndex] = Object.assign({}, plant, {
+            sunlight: plant.sunlight - neededSunlight,
+          });
 
-      const neededSunlight = sunlightToSeed(plant);
-      if (plant.status == 'seeding' && plant.sunlight >= neededSunlight) {
-        plant = Object.assign({}, plant, {
-          sunlight: plant.sunlight - neededSunlight,
-        });
+          _.times(NUM_SEEDS, () => {
+            const x = i + _.random(-1 * plant.width, plant.width);
+            const y = j + _.random(-1 * plant.width, plant.width);
 
-        _.times(NUM_SEEDS, () => {
-          const x = i + _.random(-1 * plant.width, plant.width);
-          const y = j + _.random(-1 * plant.width, plant.width);
-
-          if (x >= 0 && y >= 0 && x < WORLD_SIZE && y < WORLD_SIZE) {
-            world[x][y].push(Object.assign({}, plant, {
-              status: 'seed',
-              age: 0,
-              sunlight: 0,
-            }));
-          }
-        });
+            if (x >= 0 && y >= 0 && x < WORLD_SIZE && y < WORLD_SIZE) {
+              world[x][y].push(Object.assign({}, plant, {
+                status: 'seed',
+                age: 0,
+                sunlight: 0,
+              }));
+            }
+          });
+        }
       }
     }
   }
@@ -167,41 +201,100 @@ function filterSeeds(world) {
   });
 }
 
+function mutateSeed(seed) {
+  const fromIndex = _.random(0,3);
+  const toInitialIndex = _.random(0,2);
+  const toIndex = toInitialIndex +
+    ((toInitialIndex >= fromIndex) ? 1 : 0);
+
+  const fromAttribute = ATTRIBUTE_INDICES[fromIndex];
+  const toAttribute = ATTRIBUTE_INDICES[toIndex];
+
+  const fromScoreFn = SCORE_FN_INDICES[fromIndex];
+  const toScoreFn = SCORE_FN_INDICES[toIndex];
+
+  const fromInvScoreFn = INV_SCORE_FN_INDICES[fromIndex];
+  const toInvScoreFn = INV_SCORE_FN_INDICES[toIndex];
+
+  const fromValue = seed[fromAttribute];
+  const toValue = seed[toAttribute];
+
+  return Object.assign({}, seed, {
+    [fromAttribute]: Math.round(fromInvScoreFn(toScoreFn(fromValue) - MUTATION_FACTOR)),
+    [toAttribute]: Math.round(toInvScoreFn(toScoreFn(toValue) + MUTATION_FACTOR)),
+  })
+}
+
 function mutateSeeds(world) {
-  return world;
+  return applyToAllPlants(world, plants => {
+    return _.map(plants, plant => {
+      if (plant.status === 'seed') {
+        const newPlant = mutateSeed(plant);
+        return newPlant;
+      }
+      return plant;
+    });
+  });
 }
 
 function germinateSeeds(world) {
   return applyToAllPlants(world, plants => {
     let plant = plants[0];
-    if (plant.status === 'seed') {
-      plant = Object.assign({}, plant, {
-        status: 'germinating',
-      });
+    if (plant) {
+      if (plant.status === 'seed') {
+        plant = Object.assign({}, plant, {
+          status: 'germinating',
+        });
+      }
+      return [plant];
     }
-    return [plant];
+    return [];
+  });
+}
+
+function agePlants(world) {
+  return applyToAllPlants(world, plants => {
+    let plant = plants[0];
+    if (plant) {
+      return [Object.assign({}, plant, {
+        age: plant.age + 1,
+      })];
+    }
+    return [];
   });
 }
 
 function killOldPlants(world) {
   return applyToAllPlants(world, plants => {
     let plant = plants[0];
-    if (plant.age >= plant.lifeSpan) {
-      return [];
+    if (plant) {
+      if (plant.age >= plant.lifeSpan) {
+        return [];
+      }
+      return [plant];
     }
-    return [plant];
+    return [];
   });
 }
 
-const tick = _.flow([
+const wrapFlow = (funcs, func) => _.flow(
+  _.flatten(_.map(funcs, f => [func, f]))
+);
+
+const tick = wrapFlow([
   makePlantsSeeding,
   collectSunlight,
   spreadSeeds,
   filterSeeds,
   mutateSeeds,
   germinateSeeds,
+  agePlants,
   killOldPlants,
-]);
+], world => {
+  // console.log(world[2][2]);
+  return world;
+});
+
 
 
 function mapWorldToPlantList(world) {
@@ -213,24 +306,24 @@ function mapWorldToPlantList(world) {
     const subPlant = _.pick(plant,
       ['height', 'width', 'lifeSpan', 'shadeTolerance']
     );
-    return _.join(_.values(subPlant));
+    return _.join(_.values(subPlant), '/');
   }
 
-  const plantsList = _.filter(_.flatten(world));
+  const plantsList = _.filter(_.flattenDeep(world));
 
   return _.zipObject(
-    _.range(plantsList.length),
+    /* FIXME: this constant is a hack */
+    _.range(WORLD_SIZE*WORLD_SIZE),
     _.map(plantsList, mapPlantToString)
   );
 }
 
 
 
-const NUM_ITERATIONS = 2;
+const NUM_ITERATIONS = 100;
 
 function iterateAndWriteCSV(world) {
   const csvWriterOptions = {
-    separator: ';',
     sendHeaders: false
   };
 
